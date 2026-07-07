@@ -8,6 +8,29 @@ import VisorDocumento from './components/VisorDocumento';
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
+function fallbackTextExtraction(buffer: ArrayBuffer): string {
+    try {
+        const decoder16 = new TextDecoder('utf-16le');
+        const text16 = decoder16.decode(buffer);
+        const readableRegex = /[a-zA-Z0-9ñÑáéíóúÁÉÍÓÚüÜ\s,.;:\-?!"'()]{15,}/g;
+        const matches = text16.match(readableRegex);
+        
+        if (matches && matches.length > 2) {
+            return matches.map((m: string) => `<p>${m.trim()}</p>`).join('');
+        }
+
+        const decoder8 = new TextDecoder('utf-8');
+        const text8 = decoder8.decode(buffer);
+        const matches8 = text8.match(readableRegex);
+        if (matches8 && matches8.length > 0) {
+            return matches8.map((m: string) => `<p>${m.trim()}</p>`).join('');
+        }
+    } catch (e) {
+        console.error("Error en fallback", e);
+    }
+    return '<p><em>Aviso: Documento antiguo no soportado completamente. Guarde como .docx para ver el contenido completo.</em></p>';
+}
+
 export default function App() {
   const [docHtml, setDocHtml] = useState<string>('');
   const [tipoDocumento, setTipoDocumento] = useState<string>('COTIZACIÓN');
@@ -37,8 +60,9 @@ export default function App() {
           setDocHtml(result.value);
         }
       } catch (error) {
-        console.error('Error al procesar el archivo:', error);
-        alert('Error: No se pudo leer el archivo. Si es un archivo de Word antiguo (.doc), el navegador no puede leerlo. Por favor guárdalo como .docx en Microsoft Word.');
+        console.warn('Mammoth falló, usando extracción de texto en bruto (archivos antiguos).');
+        const fallbackHtml = fallbackTextExtraction(arrayBuffer);
+        setDocHtml(fallbackHtml);
       }
     };
     reader.readAsArrayBuffer(file);
