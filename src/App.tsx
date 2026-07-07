@@ -12,11 +12,36 @@ function fallbackTextExtraction(buffer: ArrayBuffer): string {
     try {
         const decoder16 = new TextDecoder('utf-16le');
         const text16 = decoder16.decode(buffer);
-        // Exclude binary characters. Keep alphanumeric, spaces, accents, and all common punctuation/currency symbols.
         const unreadableRegex = /[^\w\sñÑáéíóúÁÉÍÓÚüÜ,.;:\-?!"'()$€£%@+=/*&#<>{}|~\[\]^]/g;
         
+        const blacklist = new Set([
+            'normal', 'título 1', 'título 2', 'título 3', 'título 4', 'título 5',
+            'fuente de párrafo predeter.', 'tabla normal', 'sin lista', 'texto de globo',
+            'hipervínculo', 'encabezado', 'encabezado car', 'pie de página', 'pie de página car',
+            'párrafo de lista', 'times new roman', 'symbol', 'arial', 'avantgarde md bt',
+            'century gothic', 'tahoma', 'calibri light', 'calibri', 'courier new', 'wingdings',
+            'cambria math', 'archivos de programa', 'microsoft office', 'plantillas',
+            'root entry', 'data', '0table', '1table', 'worddocument', 'summaryinformation',
+            'documentsummaryinformation', 'msodatastore', 'item', 'properties', 'compobj', 'unknown'
+        ]);
+
+        const filterParagraphs = (parts: string[]) => {
+            return parts.filter(p => {
+                const t = p.trim();
+                // Eliminar basura de 1 o 2 letras que NO tenga números (ej. 'h', 'O', 'ÁG')
+                if (t.length < 3 && !/[0-9]/.test(t)) return false;
+                // Eliminar si es pura puntuación
+                if (/^[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ]+$/.test(t)) return false;
+                // Eliminar metadatos internos de Word y estilos
+                if (blacklist.has(t.toLowerCase())) return false;
+                // Eliminar extensiones temporales o basura residual
+                if (t.toLowerCase().includes('.tmp') || t === 'Q==' || t === '1RIR') return false;
+                return true;
+            });
+        };
+
         let parts = text16.split(unreadableRegex);
-        let paragraphs = parts.filter(p => p.trim().length > 0);
+        let paragraphs = filterParagraphs(parts);
         
         if (paragraphs.length > 2) {
             return paragraphs.map((m: string) => `<p>${m.trim()}</p>`).join('');
@@ -25,7 +50,7 @@ function fallbackTextExtraction(buffer: ArrayBuffer): string {
         const decoder8 = new TextDecoder('utf-8');
         const text8 = decoder8.decode(buffer);
         parts = text8.split(unreadableRegex);
-        paragraphs = parts.filter(p => p.trim().length > 0);
+        paragraphs = filterParagraphs(parts);
         
         if (paragraphs.length > 0) {
             return paragraphs.map((m: string) => `<p>${m.trim()}</p>`).join('');
