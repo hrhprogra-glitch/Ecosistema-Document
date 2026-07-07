@@ -12,18 +12,23 @@ function fallbackTextExtraction(buffer: ArrayBuffer): string {
     try {
         const decoder16 = new TextDecoder('utf-16le');
         const text16 = decoder16.decode(buffer);
-        const readableRegex = /[a-zA-Z0-9ñÑáéíóúÁÉÍÓÚüÜ\s,.;:\-?!"'()]{15,}/g;
-        const matches = text16.match(readableRegex);
+        // Exclude binary characters. Keep alphanumeric, spaces, accents, and all common punctuation/currency symbols.
+        const unreadableRegex = /[^\w\sñÑáéíóúÁÉÍÓÚüÜ,.;:\-?!"'()$€£%@+=/*&#<>{}|~\[\]^]/g;
         
-        if (matches && matches.length > 2) {
-            return matches.map((m: string) => `<p>${m.trim()}</p>`).join('');
+        let parts = text16.split(unreadableRegex);
+        let paragraphs = parts.filter(p => p.trim().length > 0);
+        
+        if (paragraphs.length > 2) {
+            return paragraphs.map((m: string) => `<p>${m.trim()}</p>`).join('');
         }
 
         const decoder8 = new TextDecoder('utf-8');
         const text8 = decoder8.decode(buffer);
-        const matches8 = text8.match(readableRegex);
-        if (matches8 && matches8.length > 0) {
-            return matches8.map((m: string) => `<p>${m.trim()}</p>`).join('');
+        parts = text8.split(unreadableRegex);
+        paragraphs = parts.filter(p => p.trim().length > 0);
+        
+        if (paragraphs.length > 0) {
+            return paragraphs.map((m: string) => `<p>${m.trim()}</p>`).join('');
         }
     } catch (e) {
         console.error("Error en fallback", e);
