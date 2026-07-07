@@ -49,8 +49,9 @@ export default function VistaCarga({ onFileUpload, tipoDocumento, setTipoDocumen
           Seleccionar Archivo
           <input
             type="file"
-            accept=".docx"
+            accept=".doc,.docx,.pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
             onChange={onFileUpload}
+            onClick={(e) => { (e.target as HTMLInputElement).value = ''; }}
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
         </label>

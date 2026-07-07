@@ -19,7 +19,7 @@ export default function App() {
         setDocHtml(result.value);
       } catch (error) {
         console.error('Error al procesar el archivo Word:', error);
-        alert('Error crítico: No se pudo procesar el archivo .docx.');
+        alert('Error: Solo se pueden procesar archivos con formato .docx (Word moderno). Verifique que el archivo no sea un PDF o un .doc antiguo.');
       }
     };
     reader.readAsArrayBuffer(file);
