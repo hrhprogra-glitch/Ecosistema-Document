@@ -28,19 +28,18 @@ function fallbackTextExtraction(buffer: ArrayBuffer): string {
         const filterParagraphs = (parts: string[]) => {
             return parts.filter(p => {
                 const t = p.trim();
-                // Eliminar basura de 1 o 2 letras que NO tenga números (ej. 'h', 'O', 'ÁG')
                 if (t.length < 3 && !/[0-9]/.test(t)) return false;
-                // Eliminar si es pura puntuación
                 if (/^[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ]+$/.test(t)) return false;
-                // Eliminar metadatos internos de Word y estilos
                 if (blacklist.has(t.toLowerCase())) return false;
-                // Eliminar extensiones temporales o basura residual
                 if (t.toLowerCase().includes('.tmp') || t === 'Q==' || t === '1RIR') return false;
                 return true;
             });
         };
 
-        let parts = text16.split(unreadableRegex);
+        // En lugar de dividir por basura binaria, la reemplazamos por espacios
+        // y luego dividimos por saltos de línea reales. Así no rompemos oraciones.
+        let cleanText16 = text16.replace(unreadableRegex, ' ');
+        let parts = cleanText16.split(/[\n\r]+/);
         let paragraphs = filterParagraphs(parts);
         
         if (paragraphs.length > 2) {
@@ -49,7 +48,8 @@ function fallbackTextExtraction(buffer: ArrayBuffer): string {
 
         const decoder8 = new TextDecoder('utf-8');
         const text8 = decoder8.decode(buffer);
-        parts = text8.split(unreadableRegex);
+        let cleanText8 = text8.replace(unreadableRegex, ' ');
+        parts = cleanText8.split(/[\n\r]+/);
         paragraphs = filterParagraphs(parts);
         
         if (paragraphs.length > 0) {

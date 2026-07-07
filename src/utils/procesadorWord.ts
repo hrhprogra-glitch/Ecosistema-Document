@@ -91,6 +91,30 @@ export const procesarFacturacion = (html: string): { html: string; cliente: stri
     }
   });
 
+  // Fallback global: si por culpa de extraer texto bruto no encontró el precio, búscalo en todo el documento.
+  const fullText = tempDiv.textContent?.replace(/\s+/g, ' ').toUpperCase() || '';
+  if (totalTexto === "S/ 0.00") {
+    const fallbackPrice = fullText.match(/(?:PRECIO\s*TOTAL|TOTAL|MONTO|COSTO).*?(?:S\/|\$|SOLES)?\s*([\d,]+(?:\.\d{2})?)/);
+    if (fallbackPrice) {
+      const num = parseFloat(fallbackPrice[1].replace(/,/g, ''));
+      if (!isNaN(num)) {
+        totalTexto = `S/ ${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+    }
+  }
+
+  if (cliente === "CLIENTE NO ESPECIFICADO") {
+    const fallbackClient = fullText.match(/(?:SE[ÑN]OR(?:ES)?|CLIENTE|ATENCI[ÓO]N)\s*:?\s*([A-Z\s]+?)(?=\s+(?:LIMA|RUC|DNI|FECHA|DIRECCI[ÓO]N|P[ÁA]GINA|PRECIO|COTIZACI[ÓO]N|01|$))/);
+    if (fallbackClient) {
+      cliente = fallbackClient[1].trim();
+    }
+  }
+
+  if (fecha === "No especificada") {
+    const fallbackDate = fullText.match(/(?:LIMA,?\s*)?(\d{1,2}\s+DE\s+[A-Z]+\s+(?:DEL?\s+)?\d{4}|\d{2}\/\d{2}\/\d{4})/);
+    if (fallbackDate) fecha = fallbackDate[0];
+  }
+
   const descripcionLimpia = tempDiv.innerHTML || '<p>SERVICIO GENERAL</p>';
 
   const filasMontos = tieneIgv ? `
