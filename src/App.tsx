@@ -2,11 +2,15 @@
 import { useState, type ChangeEvent } from 'react';
 import * as mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import WordExtractor from 'word-extractor';
+import { Buffer } from 'buffer';
 import VistaCarga from './components/VistaCarga';
 import VisorDocumento from './components/VisorDocumento';
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+// Configure PDF.js worker (usa el worker incluido en el proyecto en vez de una CDN externa,
+// que puede fallar por falta de conexión o desajuste de versión y hacía que el PDF no se leyera).
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 function fallbackTextExtraction(buffer: ArrayBuffer): string {
     try {
@@ -61,6 +65,22 @@ function fallbackTextExtraction(buffer: ArrayBuffer): string {
     return '<p><em>Aviso: Documento antiguo no soportado completamente. Guarde como .docx para ver el contenido completo.</em></p>';
 }
 
+// Extrae texto de archivos .doc binarios (Word 97-2003) usando el parser real
+// del formato OLE, en vez de adivinar el texto a partir de los bytes crudos.
+async function extractLegacyDoc(arrayBuffer: ArrayBuffer): Promise<string | null> {
+    try {
+        const extractor = new WordExtractor();
+        const document = await extractor.extract(Buffer.from(arrayBuffer));
+        const body = document.getBody();
+        const paragraphs = body.split(/\n+/).map(p => p.trim()).filter(Boolean);
+        if (paragraphs.length === 0) return null;
+        return paragraphs.map(p => `<p>${p}</p>`).join('');
+    } catch (e) {
+        console.warn('word-extractor falló al leer el .doc', e);
+        return null;
+    }
+}
+
 export default function App() {
   const [docHtml, setDocHtml] = useState<string>('');
   const [tipoDocumento, setTipoDocumento] = useState<string>('COTIZACIÓN');
@@ -81,8 +101,17 @@ export default function App() {
           for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
-            const text = textContent.items.map((item: any) => item.str).join(' ');
-            fullHtml += `<p>${text}</p>`;
+            let currentLine = '';
+            for (const item of textContent.items as any[]) {
+              currentLine += item.str;
+              if (item.hasEOL) {
+                if (currentLine.trim()) fullHtml += `<p>${currentLine.trim()}</p>`;
+                currentLine = '';
+              } else if (item.str) {
+                currentLine += ' ';
+              }
+            }
+            if (currentLine.trim()) fullHtml += `<p>${currentLine.trim()}</p>`;
           }
           setDocHtml(fullHtml);
         } else {
@@ -90,9 +119,15 @@ export default function App() {
           setDocHtml(result.value);
         }
       } catch (error) {
-        console.warn('Mammoth falló, usando extracción de texto en bruto (archivos antiguos).');
-        const fallbackHtml = fallbackTextExtraction(arrayBuffer);
-        setDocHtml(fallbackHtml);
+        console.warn('Mammoth falló, probando lector de .doc antiguo (Word 97-2003).');
+        const legacyHtml = await extractLegacyDoc(arrayBuffer);
+        if (legacyHtml) {
+          setDocHtml(legacyHtml);
+        } else {
+          console.warn('El lector de .doc antiguo también falló, usando extracción de texto en bruto.');
+          const fallbackHtml = fallbackTextExtraction(arrayBuffer);
+          setDocHtml(fallbackHtml);
+        }
       }
     };
     reader.readAsArrayBuffer(file);
